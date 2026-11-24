@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>แอดมิน | หยิบ แพ็ค พิมพ์ใบปะหน้า</title>
+<style>
+body{font:16px/1.5 Sarabun,system-ui,sans-serif;margin:0;color:#1f1b4d;background:#f3f5fb}
+.w{max-width:1000px;margin:auto;padding:16px}h1,h2{margin:.4em 0}
+.box{background:#fff;border:1px solid #dcdff0;border-radius:12px;padding:16px;margin:12px 0}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #dcdff0;padding:8px;text-align:left}
+button,input{font:inherit;padding:10px 16px;border-radius:8px;border:1px solid #4b3fbf}
+button{background:#4b3fbf;color:#fff;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}
+.sec{background:#fff;color:#4b3fbf}.ord{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ok{color:#1d6b2a;font-weight:700}#labels{display:none}
+.label{width:100mm;height:150mm;padding:6mm;border:1px solid #000;font-size:12pt;page-break-after:always;box-sizing:border-box;background:#fff}
+.label .big{font-size:20pt;font-weight:700}.label hr{border:0;border-top:1px dashed #000}.cod{border:2px solid #000;padding:4px;font-size:18pt;font-weight:700;text-align:center}
+@media print{@page{size:100mm 150mm;margin:0}body{background:#fff}.w{display:none}#labels{display:block}.label{border:0}}
+</style></head><body><div class="w">
+<h1>หยิบ · แพ็ค · พิมพ์ใบปะหน้า</h1>
+<div class="box" id="login"><input id="key" type="password" placeholder="รหัสแอดมิน"> <button onclick="load()">เข้าสู่ระบบ</button> <span id="err" style="color:#b3261e"></span></div>
+<div id="app" hidden>
+ <div class="box"><h2>1) ใบหยิบสินค้ารวม (ออเดอร์สถานะ NEW)</h2><table id="pick"></table></div>
+ <div class="box"><h2>2) ตรวจและแพ็คทีละออเดอร์</h2><p>ติ๊กสินค้าให้ครบก่อน ปุ่มพิมพ์จะเปิดใช้งาน</p><div id="orders"></div></div>
+ <button id="printAll" class="sec" onclick="printLabels()">พิมพ์ใบปะหน้าที่แพ็คครบแล้ว</button>
+ <button onclick="markPacked()">ยืนยันแพ็คเสร็จ (เปลี่ยนสถานะเป็น PACKED)</button> <span id="st"></span>
+</div></div><div id="labels"></div>
+<script src="config.js"></script>
+<script>
+const C=CONFIG,$=s=>document.querySelector(s),img=sku=>(C.PRODUCTS.find(p=>p.sku===sku)||{}).img||'';
+let orders=[],ready=new Set();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){const key=$('#key').value||sessionStorage.k;
+ try{const j=await (await fetch(C.API_URL+'?key='+encodeURIComponent(key))).json();if(!j.ok)throw new Error(j.error);
+  sessionStorage.k=key;$('#login').hidden=true;$('#app').hidden=false;group(j.rows)}catch(e){$('#err').textContent=e.message}}
+function group(rows){const m={};rows.filter(r=>r.Status==='NEW').forEach(r=>{(m[r.OrderID]??={...r,items:[]}).items.push({sku:r.SKU,name:r.ProductName,qty:r.Qty})});
+ orders=Object.values(m);const t={};orders.forEach(o=>o.items.forEach(i=>t[i.sku]=[i.name,(t[i.sku]?.[1]||0)+i.qty]));
+ $('#pick').innerHTML='<tr><th></th><th>SKU</th><th>สินค้า</th><th>จำนวนที่ต้องหยิบ</th></tr>'+Object.entries(t).map(([s,[n,q]])=>`<tr><td><img src="${img(s)}" width="40" alt=""></td><td>${esc(s)}</td><td>${esc(n)}</td><td><b>${q}</b></td></tr>`).join('')||'';
+ $('#orders').innerHTML=orders.map((o,k)=>`<div class="box"><div class="ord"><b>${esc(o.OrderID)}</b><span>${esc(o.Name)} · ${esc(o.Province)}</span></div>
+ ${o.items.map((i,j)=>`<label style="display:block"><input type="checkbox" data-o="${k}" onchange="chk()"> ${esc(i.sku)} ${esc(i.name)} × <b>${i.qty}</b></label>`).join('')}
+ <span class="ok" id="r${k}"></span></div>`).join('')||'<p>ไม่มีออเดอร์ใหม่</p>';chk()}
+function chk(){ready=new Set();orders.forEach((o,k)=>{const c=[...document.querySelectorAll(`[data-o="${k}"]`)],all=c.every(x=>x.checked);
+ $('#r'+k).textContent=all?'✔ แพ็คครบ':'';if(all)ready.add(k)});$('#printAll').disabled=!ready.size}
+function printLabels(){const S=C.SHOP;$('#labels').innerHTML=[...ready].map(k=>{const o=orders[k];
+ return `<div class="label"><b>ผู้ส่ง:</b> ${esc(S.name)} โทร ${esc(S.phone)}<br>${esc(S.address)}<hr>
+ <b>ผู้รับ:</b><div class="big">${esc(o.Name)}</div><div class="big">โทร ${esc(o.Phone)}</div>
+ <div>${esc(o.Address)} ต.${esc(o.Subdistrict)} อ.${esc(o.District)}<br>จ.${esc(o.Province)} <span class="big">${esc(o.Zip)}</span></div><hr>
+ <div>รายการ: ${o.items.map(i=>esc(i.sku)+' ×'+i.qty).join(', ')}</div>${o.Note?`<div>หมายเหตุ: ${esc(o.Note)}</div>`:''}
+ <div class="cod" style="margin-top:6mm">${o.Payment==='COD'?'เก็บเงินปลายทาง ฿'+o.OrderTotal:'ชำระแล้ว (โอน)'}</div>
+ <p style="text-align:center;margin:4mm 0 0">เลขที่ <b>${esc(o.OrderID)}</b></p></div>`}).join('');print()}
+async function markPacked(){if(!ready.size)return;const ids=[...ready].map(k=>orders[k].OrderID);
+ const j=await (await fetch(C.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'markPacked',key:sessionStorage.k,orderIds:ids})})).json();
+ $('#st').textContent=j.ok?'อัปเดตแล้ว':j.error;if(j.ok)load()}
+if(sessionStorage.k)load();
+</script></body></html>
